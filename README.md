@@ -1,15 +1,15 @@
-# AutoDock DLG Analysis with Visualization
+# AutoDock DLG Histogram Generator
 
-This Python script analyzes AutoDock Vina `.dlg` result files, extracting binding energies and RMSD values, and generates a table and a plot for visualization. It is designed to be used in Google Colaboratory (Colab).
+This Python script analyzes AutoDock Vina `.dlg` result files, extracts binding energies, and generates a histogram to visualize their distribution. It is designed to be used in Google Colaboratory (Colab).
 
 ## Features
 
 * **File Upload:** Uses `google.colab.files.upload()` to allow users to upload their `.dlg` files directly in Colab.
-* **Data Extraction:** Parses the `.dlg` file to extract binding energies and RMSD values for each docked pose.
-* **Table Generation:** Creates a pandas DataFrame to display the results in a table format.
-* **Plot Visualization:** Generates a scatter plot of binding energy vs. pose number using `matplotlib`.
-* **Export to Excel:** Allows users to save the results table as an Excel file (`.xlsx`).
-* **Save Plot as Image:** Allows users to save the plot as a PNG image.
+* **Data Extraction:** Parses the `.dlg` file to extract binding energies for each docked pose.
+* **Histogram Visualization:** Generates a histogram of binding energy distribution using `matplotlib`.
+* **Export to Excel:** Allows users to save the results table (pose, binding energy, RMSD) as an Excel file (`.xlsx`).
+* **Save Plot as Image:** Allows users to save the histogram plot as a PNG image.
+* **Robust Error Handling:** Includes `try...except` blocks to handle potential errors during data extraction.
 
 ## Usage
 
@@ -17,7 +17,7 @@ This Python script analyzes AutoDock Vina `.dlg` result files, extracting bindin
 2.  **Copy and Paste:** Copy the provided Python script into a code cell in Colab.
 3.  **Run the Cell:** Execute the code cell. You will be prompted to upload your `.dlg` file.
 4.  **Upload File:** Select and upload your AutoDock Vina `.dlg` result file.
-5.  **View Results:** The script will display the results table and the binding energy plot in the output.
+5.  **View Results:** The script will display the results table and the binding energy histogram in the output.
 6.  **Download Files (Optional):** If `save_excel=True` and `save_plot=True` are set when calling the function, the Excel file and PNG plot will be available for download.
 
 ## Code
@@ -51,45 +51,61 @@ def analyze_dlg_with_visualization(save_excel=False, save_plot=False):
     # پردازش امتیازات داکینگ
     binding_energies = []
     rmsd_values = []
-    for line in docking_data:
-        if "DOCKED: USER    Estimated Free Energy of Binding" in line:
-            energy = float(line.split()[-2])
-            binding_energies.append(energy)
-        if "DOCKED: USER    RMSD from best mode" in line:
-            rmsd = float(line.split()[-1])
-            rmsd_values.append(rmsd)
+    poses = []  # Store pose numbers explicitly
 
-    # ایجاد DataFrame
+    for line in docking_data:
+        if "DOCKED: MODEL" in line:
+            poses.append(int(line.split()[-1]))  # Extract pose number
+        if "DOCKED: USER    Estimated Free Energy of Binding" in line:
+            try:
+                energy = float(line.split()[-2])
+                binding_energies.append(energy)
+            except (ValueError, IndexError):
+                print(f"Warning: Could not extract binding energy from line: {line}")
+        if "DOCKED: USER    RMSD from best mode" in line:  # Use the actual text
+            try:
+                rmsd = float(line.split()[-1])
+                rmsd_values.append(rmsd)
+            except (ValueError, IndexError):
+                print(f"Warning: Could not extract RMSD value from line: {line}")
+
+    # Ensure all lists have the same length
+    min_len = min(len(poses), len(binding_energies), len(rmsd_values))
+    poses = poses[:min_len]
+    binding_energies = binding_energies[:min_len]
+    rmsd_values = rmsd_values[:min_len]
+
+    # Create DataFrame
     df_results = pd.DataFrame({
-        "Pose": list(range(1, len(binding_energies) + 1)),
+        "Pose": poses,  # Use extracted pose numbers
         "Binding Energy (kcal/mol)": binding_energies,
         "RMSD (Å)": rmsd_values
     })
 
-    # نمایش جدول
+    # Display table
     print("\nDocking Results Table:\n")
     print(df_results)
 
-    # ایجاد نمودار پراکندگی
+    # Create histogram plot
     plt.figure(figsize=(10, 6))
-    plt.scatter(df_results["Pose"], df_results["Binding Energy (kcal/mol)"])
-    plt.title("Binding Energy vs. Pose")
-    plt.xlabel("Pose")
-    plt.ylabel("Binding Energy (kcal/mol)")
+    plt.hist(binding_energies, bins=50, color='blue', edgecolor='black')  # Adjust bins as needed
+    plt.title("Histogram of Binding Energies")
+    plt.xlabel("Binding Energy (kcal/mol)")
+    plt.ylabel("# Conformations")
     plt.grid(True)
     plt.show()
 
-    # ذخیره در اکسل (اختیاری)
+    # Save to Excel (optional)
     if save_excel:
         excel_file_name = "docking_results.xlsx"
         df_results.to_excel(excel_file_name, index=False)
         files.download(excel_file_name)
 
-    # ذخیره نمودار به عنوان تصویر (اختیاری)
+    # Save plot as image (optional)
     if save_plot:
-        plot_file_name = "binding_energy_plot.png"
+        plot_file_name = "binding_energy_histogram.png"
         plt.savefig(plot_file_name)
         files.download(plot_file_name)
 
-# اجرای تابع با ذخیره اختیاری
+# Run the function with optional saving
 analyze_dlg_with_visualization(save_excel=True, save_plot=True)
